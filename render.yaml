@@ -5,12 +5,9 @@ services:
   # PostgreSQL Database
   - type: pserv
     name: smartphone-price-tracker-db
-    env: docker
     plan: starter  # Free tier, upgrade to standard for production
-    databases:
-      - name: smartphone_prices
-        databaseName: smartphone_prices
-        user: pricetracker
+    databaseName: smartphone_prices
+    databaseUser: pricetracker
 
   # Redis Service
   - type: redis
