@@ -1,0 +1,144 @@
+version: '3.8'
+
+services:
+  # Main application
+  price-tracker:
+    build: .
+    container_name: smartphone-price-tracker
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://pricetracker:${POSTGRES_PASSWORD:-secretpass}@postgres:5432/smartphone_prices
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - price-tracker-network
+    command: python main.py --scheduler
+
+  # CLI service for manual operations
+  price-tracker-cli:
+    build: .
+    container_name: smartphone-price-tracker-cli
+    profiles: ["cli"]
+    environment:
+      - DATABASE_URL=postgresql://pricetracker:${POSTGRES_PASSWORD:-secretpass}@postgres:5432/smartphone_prices
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - price-tracker-network
+    command: tail -f /dev/null  # Keep container running for manual CLI usage
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: smartphone-price-tracker-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smartphone_prices
+      POSTGRES_USER: pricetracker
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secretpass}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pricetracker -d smartphone_prices"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - price-tracker-network
+
+  # Redis for caching and task queue
+  redis:
+    image: redis:7-alpine
+    container_name: smartphone-price-tracker-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redispass}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - price-tracker-network
+
+  # Optional: pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: smartphone-price-tracker-pgadmin
+    profiles: ["admin"]
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-adminpass}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "8080:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - price-tracker-network
+
+  # Optional: Grafana for monitoring
+  grafana:
+    image: grafana/grafana:latest
+    container_name: smartphone-price-tracker-grafana
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-grafanapass}
+      - GF_DATABASE_TYPE=postgres
+      - GF_DATABASE_HOST=postgres:5432
+      - GF_DATABASE_NAME=smartphone_prices
+      - GF_DATABASE_USER=pricetracker
+      - GF_DATABASE_PASSWORD=${POSTGRES_PASSWORD:-secretpass}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - price-tracker-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  price-tracker-network:
+    driver: bridge

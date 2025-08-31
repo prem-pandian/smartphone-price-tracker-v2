@@ -1,0 +1,124 @@
+# Render Blueprint for Smartphone Price Tracker
+# This file defines all services needed for deployment on Render.com
+
+services:
+  # PostgreSQL Database
+  - type: pserv
+    name: smartphone-price-tracker-db
+    env: docker
+    plan: starter  # Free tier, upgrade to standard for production
+    databases:
+      - name: smartphone_prices
+        databaseName: smartphone_prices
+        user: pricetracker
+
+  # Redis Service
+  - type: redis
+    name: smartphone-price-tracker-redis
+    plan: starter  # Free tier
+    maxmemoryPolicy: allkeys-lru
+
+  # Main Web Service (for API and dashboard if needed)
+  - type: web
+    name: smartphone-price-tracker-web
+    env: python3
+    plan: starter  # Free tier, upgrade for production
+    buildCommand: pip install -r requirements-render.txt
+    startCommand: python -m gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 main:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartphone-price-tracker-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: smartphone-price-tracker-redis
+          property: connectionString
+    healthCheckPath: /health
+
+  # Background Worker for Scraping
+  - type: worker
+    name: smartphone-price-tracker-worker
+    env: python3
+    plan: starter
+    buildCommand: pip install -r requirements-render.txt
+    startCommand: python worker.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartphone-price-tracker-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: smartphone-price-tracker-redis
+          property: connectionString
+
+  # Cron Job for Scheduled Tasks
+  - type: cron
+    name: smartphone-price-tracker-scheduler
+    env: python3
+    plan: starter
+    buildCommand: pip install -r requirements-render.txt
+    schedule: "0 6 * * 1"  # Run every Monday at 6 AM UTC
+    startCommand: python cli.py scrape && python cli.py report
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartphone-price-tracker-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: smartphone-price-tracker-redis
+          property: connectionString
+
+# Environment variables that need to be set manually in Render dashboard
+envVarGroups:
+  - name: email-config
+    envVars:
+      - key: SMTP_SERVER
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USERNAME
+        # Set this in Render dashboard
+      - key: SMTP_PASSWORD
+        # Set this in Render dashboard (use App Password for Gmail)
+      - key: EMAIL_FROM
+        # Set this in Render dashboard
+      - key: EMAIL_TO
+        # Set this in Render dashboard
+  
+  - name: api-keys
+    envVars:
+      - key: EBAY_CLIENT_ID
+        # Optional: Set in Render dashboard
+      - key: EBAY_CLIENT_SECRET
+        # Optional: Set in Render dashboard
+      - key: BACK_MARKET_API_KEY
+        # Optional: Set in Render dashboard
+  
+  - name: app-config
+    envVars:
+      - key: LOG_LEVEL
+        value: INFO
+      - key: SCRAPING_DELAY
+        value: 2
+      - key: MAX_RETRIES
+        value: 3
+      - key: TIMEOUT
+        value: 30
+      - key: USE_PROXY
+        value: false
+      - key: DEFAULT_CURRENCY
+        value: USD
+      - key: PRICE_CHANGE_THRESHOLD
+        value: 5.0
