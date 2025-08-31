@@ -1,18 +1,15 @@
 # Render Blueprint for Smartphone Price Tracker
 # This file defines all services needed for deployment on Render.com
 
+databases:
+  - name: smartphone-price-tracker-db
+
 services:
-  # PostgreSQL Database
-  - type: pserv
-    name: smartphone-price-tracker-db
-    plan: starter  # Free tier, upgrade to standard for production
-    databaseName: smartphone_prices
-    databaseUser: pricetracker
 
   # Redis Service
   - type: redis
     name: smartphone-price-tracker-redis
-    plan: starter  # Free tier
+    plan: starter
     maxmemoryPolicy: allkeys-lru
 
   # Main Web Service (for API and dashboard if needed)
@@ -21,7 +18,7 @@ services:
     env: python3
     plan: starter  # Free tier, upgrade for production
     buildCommand: pip install -r requirements-render.txt
-    startCommand: python -m gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 main:app
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 app:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -77,45 +74,6 @@ services:
           name: smartphone-price-tracker-redis
           property: connectionString
 
-# Environment variables that need to be set manually in Render dashboard
-envVarGroups:
-  - name: email-config
-    envVars:
-      - key: SMTP_SERVER
-        value: smtp.gmail.com
-      - key: SMTP_PORT
-        value: 587
-      - key: SMTP_USERNAME
-        # Set this in Render dashboard
-      - key: SMTP_PASSWORD
-        # Set this in Render dashboard (use App Password for Gmail)
-      - key: EMAIL_FROM
-        # Set this in Render dashboard
-      - key: EMAIL_TO
-        # Set this in Render dashboard
-  
-  - name: api-keys
-    envVars:
-      - key: EBAY_CLIENT_ID
-        # Optional: Set in Render dashboard
-      - key: EBAY_CLIENT_SECRET
-        # Optional: Set in Render dashboard
-      - key: BACK_MARKET_API_KEY
-        # Optional: Set in Render dashboard
-  
-  - name: app-config
-    envVars:
-      - key: LOG_LEVEL
-        value: INFO
-      - key: SCRAPING_DELAY
-        value: 2
-      - key: MAX_RETRIES
-        value: 3
-      - key: TIMEOUT
-        value: 30
-      - key: USE_PROXY
-        value: false
-      - key: DEFAULT_CURRENCY
-        value: USD
-      - key: PRICE_CHANGE_THRESHOLD
-        value: 5.0
+# Note: Set these environment variables manually in each service:
+# SMTP_USERNAME, SMTP_PASSWORD, EMAIL_FROM, EMAIL_TO
+# Optional: EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, BACK_MARKET_API_KEY
