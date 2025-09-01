@@ -16,7 +16,7 @@ services:
   # Main Web Service (for API and dashboard if needed)
   - type: web
     name: smartphone-price-tracker-web
-    runtime: python3
+    runtime: python
     plan: starter  # Free tier, upgrade for production
     buildCommand: pip install -r requirements-render.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 app:app
@@ -37,7 +37,7 @@ services:
   # Background Worker for Scraping
   - type: worker
     name: smartphone-price-tracker-worker
-    runtime: python3
+    runtime: python
     plan: starter
     buildCommand: pip install -r requirements-render.txt
     startCommand: python worker.py
@@ -57,7 +57,7 @@ services:
   # Cron Job for Scheduled Tasks
   - type: cron
     name: smartphone-price-tracker-scheduler
-    runtime: python3
+    runtime: python
     plan: starter
     buildCommand: pip install -r requirements-render.txt
     schedule: "0 6 * * 1"  # Run every Monday at 6 AM UTC
